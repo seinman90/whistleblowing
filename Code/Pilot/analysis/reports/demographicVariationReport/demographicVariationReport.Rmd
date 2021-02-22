@@ -1,0 +1,85 @@
+---
+title: "Demographic Variation"
+author: "Sarah Inman"
+date: "12 June 2020"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+  extra_dependencies: float
+header-includes: \usepackage{booktabs} \usepackage{longtable} \usepackage{array} \usepackage{multirow}
+  \usepackage{wrapfig} \usepackage{float} \floatplacement{table}{H} \maxdeadcycles=200
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=10, fig.height=5, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+
+```{r, results = 'asis'}
+library(readstata13)
+wd <- '~/Insync/sei2112@columbia.edu/Google Drive - Shared with me/Sarah Summer 2020/COVID-19/'
+setwd(wd)
+
+source('Code/Pilot/analysis/summaryStats.R')
+source('Code/Pilot/analysis/reports/demographicVariationReport/demographicVariation.R')
+# these are the IDs for the factories we are interested in
+factories <- c(90, 63, 13)
+
+survey2017 <- read.dta13('Data/raw/2017_survey_data/data_NK_2017 (2).dta') %>%
+  filter(factorycode %in% factories)
+# manual fix to prevent text box overruning
+# df$q10_6 <- as.character(df$q10_6) %>% paste0('\n')
+# df$q10_6 <- factor(df$q10_6, levels = c('yes\n', 'no\n'))
+
+makeFullTable('analyseQ3', cap = 'q3: personal information', colWidths = '5em')
+makeFullTable('analyseQ7', cap = 'q7: Current terms and conditions and working condition of this factory job')
+makeFullTable('analyseQ9.1', cap = 'q9.1: Relationship between supervisor / management and workers and organizational justice')
+makeFullTable('analyseQ9.2', cap = 'q9.2: Do you agree with the following statements?', colWidths = c('8em', '6em'))
+makeFullTable('analyseQ10.1', cap = 'q10.1: How often do you experience the following?')
+ cat("\n\n\\clearpage\n")
+makeFullTable('analyseQ10',
+              cap = 'q10.2-q10.10: Experience of abuse',
+              long = TRUE,
+              colWidths = c('20em', '10em'))
+
+survey2017 %>%
+  makeFullTable(fun = 'analyseQ9.1',
+                colWidths = c('8em', '8em'),
+                sewing = TRUE,
+                cap = 'q9.1: Relationship between supervisor / management and workers and organizational justice, sewing vs all')
+survey2017 %>%
+  makeFullTable(fun = 'analyseQ9.2', sewing = TRUE,cap = 'q9.2: Do you agree with the following statements?, sewing vs all', colWidths = c('8em', '6em'))
+survey2017 %>%
+  makeFullTable(fun = 'analyseQ10.1', sewing = TRUE,cap = 'q10.1: How often do you experience the following?, sewing vs all')
+ cat("\n\n\\clearpage\n")
+survey2017 %>%
+  makeFullTable(fun = 'analyseQ10',
+              cap = 'q10.2-q10.10: Experience of abuse, sewing vs all',
+              long = TRUE,
+              sewing = TRUE,
+              colWidths = c('12em', '4em'))
+
+
+makeFullTable('analyseQ9.2', cap = 'q9.2: Do you agree with the following statements?,by gender', colWidths = c('8em', '6em'), genderSplit = TRUE)
+makeFullTable('analyseQ10.1', cap = 'q10.1: How often do you experience the following?, by gender', genderSplit = TRUE)
+ cat("\n\n\\clearpage\n")
+makeFullTable('analyseQ10',
+              cap = 'q10.2-q10.10: Experience of abuse, by gender',
+              long = TRUE,
+              colWidths = c('11em', '6em'),genderSplit = TRUE)
+
+makeFullTable('analyseQ10.12',
+              cap = 'q10.12/q10.16: injuries at current factory',
+              colWidths = c('14em', '2em'))
+
+
+ cat("\n\n\\clearpage\n")
+ makeFullTable('analyseQ14.1', cap = 'q14.1: If the workers have any problems or complaints, where do they raise their complaints ?', colWidths = c('14em', '6em'))
+makeFullTable('analyseQ14', cap = 'q14.2-14.18: Representation and freedom of speech', long = TRUE, colWidths = c('14em', '6em'))
+makeFullTable('analyseQ15', cap = 'q15.7-15.9: knowledge of laws', colWidths = c('14em', '4em'))
+cat("\n\n\\clearpage\n")
+makeFullTable('analyseQ17', cap = 'q17: job satisfaction', long = TRUE, colWidths= c('14em', '10em'))
+makeFullTable('analyseQ18', cap = 'q18.1-18.4: Emotions at workplace', long = TRUE, colWidths = c('8em', '5em'))
+```

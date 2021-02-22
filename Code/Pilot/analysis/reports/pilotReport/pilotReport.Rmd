@@ -1,0 +1,245 @@
+---
+title: "Pilot analysis v2"
+author: "Sarah Inman"
+date: "31 May 2020"
+output:
+  pdf_document: default
+  extra_dependencies: float
+  html_document: default
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+ \maxdeadcycles=200
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r, results = 'asis'}
+wd <- '~/Insync/sei2112@columbia.edu/Google Drive - Shared with me/Sarah Summer 2020/COVID-19/'
+setwd(wd)
+
+source('Code/Pilot/analysis/summaryStats.R')
+source('Code/Pilot/analysis/reports/pilotReport/cleanPilot.R')
+inpath <- 'Data/raw/worker_baseline_survey_pilot.dta'
+dat <- read.dta(inpath) %>%
+  mutate_if(is.factor, 
+            ~factor(fixEncoding(.), levels = fixEncoding(levels(.)))) %>%
+    mutate(starttime = mdy_hm(start_time), 
+           endtime = mdy_hm(end_time),
+           duration = endtime - starttime)
+for(i in 1:3) {
+  dat[hour(dat$endtime) < 11,paste0('q60_rank', i)]  <- NA
+}
+
+dat$q15_year <- cleanQ15(dat)
+dat$q19_a <- rowSums(dat[,paste0('q19_', c('a', 'b', 'c', 'd', 'e'))])
+
+for(i in 1:5) {
+  dat[is.na(dat[paste0('q59_v1_rank', i)]), paste0('q59_v1_rank', i)] <- dat[is.na(dat[paste0('q59_v1_rank', i)]), paste0('q59_v2_rank', i)]
+}
+
+catVarList <- c('q2', 'q4', 'q5',  'q7',  'q9', 'q10', 'q11', 
+                'q12', 'q13', 'q20', 'q21', 'q23', 'q26',
+                'q27', 'q30', 'q31', 'q32', 'q33', 'q34', 'q38', 'q40', 'q41', 'q42', 'q43', 
+                'q44', 'q47', 'q48', 'q49', 'q50', 'q51', 'q52', 'q53', 'q54', 'q55', 'q56', 
+                'q57', 'q58', 'q61', 'q63_a', 'q63_b', 'q63_c', 'q63_d', 
+                'q66', 'q67', 'q72',
+                'q6', 'q16', 'q22', 'q24', 'q28', 'q29',  'q35', 'q36', 'q37', 'q39', 'q69', 'q71', 'q73', 'q74')
+
+multiVarList <- c('q25', 'q45', 'q46')
+
+rankVarList <- c('q59_v1',  
+                 'q60')
+
+numericVarList <- c('q3', 'q8', 'q14', 'q19_a', 'q15_year')
+
+questionLabs <- list(
+    q1 = 'What is the name of your factory?',
+    q2 = 'What is your gender?',
+    q3 = 'What is your age?',
+    q4 = 'How much schooling have you had?',
+    q5 = 'What district were you born in?',
+    q6 = 'Did you come to this area in order to look for a job in the garments sector?',
+    q7 = 'What is your current marital status?',
+    q8 = 'How old were you when you married your first husband?',
+    q9 = 'How is/was your relationship with your husband?',
+    q10 = 'Does your husband consult with you about household decisions?',
+    q11 = 'What is your department?',
+    q12 = 'What is your position?',
+    q13 = 'How do you travel to work?',
+    q14 = 'How long does it take you to get to work?',
+    q15_year = 'How long have you been working in garment factories? (Years)',
+    q16 = "Did you work at a different garment factory before you started working at your current factory?",
+    q17 = 'Including your current job, how long have you been working in garment factories all together?',
+    q18 = 'What is the name and location of the first garment factory that you worked at?',
+    q19_a = 'Last month, how much did you earn?',
+    q20 = 'Rekana/Hassan works the same position as you at another factory in the same neighborhood as your factors. Which of the following amounts do you think is closest to Rekana/Hassan\'s total salary in a typical month?',
+    q21 = 'Do you think that all factories in your neighborhood pay about the same wage for your position?',
+    q22 = 'Did you know any garment workers before you began work in the garments sector?',
+    q23 = 'Approximately how many?',
+    q24 = 'Did you discuss the work with them?',
+    q25 = 'Did you talk about any of the following topics?',
+    q26 = 'How did you get your first job?',
+    q27 = 'How many people in total did you know at the first factory that you worked at when you started the job?',
+    q28 = 'Did you know anything about this factory from other workers?',
+    q29 = 'From other sources',
+    q30 = 'Did you make any referrals of family or friends to your factory while you were in the first factory that you worked at?',
+    q31 = 'Did you complete a manual test when you started the job?',
+    q32 = 'Why did you leave your original factory?',
+    q33 = 'How did you get your current job?',
+    q34 = 'How many people in total did you know at this factory when you started the job?',
+    q35 = 'Did you know anything about this factory from other workers?',
+    q36 = 'Did you know anything about this factory from other sources?',
+    q37 = 'Have you made any referrals of family or friends while you were in this factory?',
+    q38 = 'How many referrals did you make?',
+    q39 = 'Did you complete a manual test when you started the job?',
+    q40 = 'If you weren’t working in your current job, for example because you decided that you wanted to leave your factory or your factory unexpectedly closed, what do you think that you would be doing?',
+    q41 = 'If your factory unexpectedly closed, how long do you think that it would take you to find a different job in the garments sector?',
+    q42 = 'Is your factory located in an Export Processing Zone?',
+    q43 = 'Overall, during your time in this factory, did you feel the management has been kind to you?',
+    q44 = 'Overall, during your time in this factory, did you feel the management has been kind to other workers?',
+    q45 = 'Which of the following benefits do workers at your factory have access to?',
+    q46 = 'Have one or more workers at your factory participated in any of the following activities in the past six months or since you began working here if less than four months ago?',
+    q47 = 'A trade union is an organization whose members are workers employed in the same sector, like the garments sector. The role of a trade union is to negotiate with employers on behalf of its members. Is there one or more trade unions at your factory?',
+    q48 = "A Workers’ Welfare Association is an organization whose members are workers in the garments sector that work at factories in EPZs. The role of a Workers’ Welfare Association is to negotiate with employers on behalf of its members. Is there a Workers’ Welfare Association at your factory?",
+    q49 = "A Participation Committee is a factory committee with worker and manager members. The role of a Participation Committee is to handle issues related to worker wages and wellbeing and to ensure application of labor laws. Is there a Participation Committee at your factory?",
+    q50 = "Have you heard of the Accord and/or of the Alliance?",
+    q51 = "To your knowledge, was your factory covered by the Accord or the Alliance?",
+    q52 = "Imagine that the senior management at your factory announced on the PA system that the government had audited the factory for building safety and was found to be safe. Would you trust that the managers are telling the truth?",
+    q53 = "Imagine that a sewing operator at your factory reported to senior management that her supervisor slapped her because she made a mistake. Senior management announces that they will punish the supervisor by reducing his wages for that month. Would you trust that the managers are telling the truth?",
+    q54 = "Sometimes managers in garment factories behave toward workers in ways that upsets, threatens, or embarrasses workers. For example, managers may yell at, slap, or make sexual advances toward workers. Do you think that managers at your factory upset, threaten, or embarrass workers more, less, or about the same as managers in a typical garment factory in your geographic area?",
+    q55 = "Factories’ facilities include their working environment, for example,  the temperature, air quality, and bathroom cleanliness, health facilities, for example, a medical clinic, and safety, for example, protective gear and fire protections. Do you think that your factory’s facilities, including its working environment, safety, and health facilities, are better, worse, or about the same as those of a typical garment factory in your geographic area?",
+    q56 = "Think about your wages for typical month at your factory. Do you think that your factory’s wages for your position type are higher, lower, or about the same as those paid for your position type by other garment factories in your geographic area?",
+    q57 = "Sometimes, factories do not pay their workers on time, do not fully compensate them for overtime hours, do not allow workers to take leave, or unfairly fire workers. Do you think that your factory’s employment practices for these aspects, for example, paying workers on time and fairly, allowing them to take leave, and only firing workers when there is a good reason, are better, worse, or about the same as those of a typical garment factory in your geographic area?",
+    q58 = "Sometimes, factory managers do not allow worker organizations, such as Participation Committees, Workers’ Welfare Associations, and trade unions, to be present or to perform their legal duties inside the factory. Do you think that your factory’s managers’ are more, less, or similarly supportive of worker organizations to be present and to perform their compared to a typical garment factory in your geographic area?",
+    q59_v1_rank1 = "I am going to list some aspects of a garment sector job that may be important to garment workers. I want for you tell me which aspect is most important for you. Then I will ask you to tell me which is next most important to you. We will go through the list until we rank them from first to last, where first is most important to you, and last is least important to you.",
+    q59_v2 = "I am going to list some aspects of a garment sector job that may be important to garment workers. I want for you to rank each aspect in the order of its importance. Rank the aspect that you think is most important first. Rank the aspect that you think is second most important second. And so on.",
+    q60_rank1 = "I am going to tell you about jobs at three different factories in the garments sector. I want for you to rank these jobs in the order of which job you would prefer to work in. Please note that none of these jobs offers overtime hours or overtime wages. Please also imagine that these jobs are similar for any characteristics that I do not mention. For example, the risk of experiencing an accident or injury is similar at all three factories.",
+    q61 = "You ranked Factory [A/B/C] first. Imagine that this factory is located very nearby to your current factory, so that your commute to work would be the same. If you were looking for a new job and were offered this job, how likely would you be to accept it? ",
+    q62 = "We are going to play a game with numbers. I will tell you a number. Your job is to remember the number. When I ask, you tell me the number.",
+    q63_a = "Do you agree, disagree, or neither agree nor disagree that the garment workers in your neighborhood all know which factories are the good ones to work at. ",
+    q63_b = "Do you agree, disagree, or neither agree nor disagree that it would be very hard for workers at a local factory to get a job at a compliant factory",
+    q63_c = "Do you agree, disagree, or neither agree nor disagree that you could earn higher wages if you moved to another factory",
+    q63_d = "Do you agree, disagree, or neither agree nor disagree that garments workers all agree on what makes a factory a good place to work.",
+    q64 = 'What are best three factories in your area in terms of the overall working conditions and relations with management? Rank:',
+    q65 = 'What are worst three factories in your area in terms of the overall working conditions and relations with management? Rank:',
+    q66 = "Do you work in a “local” factory or a “compliant” factory? ",
+    q67 = "Do you think that you will ever work in a “compliant” factory? ",
+    q69 = "Was your first job in a 'local' factory?",
+    q70 = "Since that job, have you held any job in a “local” factory? ",
+    q71 = 'Do any of your family or friends work in the RMG sector?',
+    q72 = "What type of factory does your most of your family and friends work in?",
+    q73 = "BRAC is considering testing a program in which we will provide workers with information about working conditions and wages at different garment factories in their area. Would you be interested in receiving this information?",
+    q74 = "Do you own your own mobile phone on which you could receive this information? ",
+    q75 = 'Does someone else in your household have a mobile phone that you can use whenever you would like?'
+)
+
+vars <- names(dat)
+vars <- vars[str_detect(vars, '^q') | vars == 'duration']
+
+dat$q66 <- as.character(dat$q66)
+
+analyseQ645 <-  function(dat, var) {
+  var <- str_replace(var, '_.*', '')
+  vars <- names(dat)[str_detect(names(dat), paste0(var, '_.*[0-9]+$'))]
+  # clean up factory names
+  cleanFactory <- function(txt) {
+    txt <- as.character(txt)
+      txt[txt == 'Ha-meem design ltd.'] <- 'Hamim'
+      txt[txt == 'Huplan garments'] <-'Hop Lun Apparel Ltd.'
+      txt[txt == 'L Usine Fashion Ltd. ( Unit-2)'] <-'L Usine Fashion Ltd.( Unit-2)'
+      txt[txt == 'Oeyega chaina garments'] <-'Oaga China'
+      txt[txt %in% c('SATURN TEXTILES LTD.', 'Saturn Textiles Ltd.(Woven Division)', 'Seturn Textile Ltd.Knit Division)', 'Saturn Texttile Limited', 'Seturn Textile Ltd. (Knit Division)')] <-'Saturn Textile'
+      txt[txt == 'Taratex (BD) Ltd.'] <-'Taratex Fashion Limited'
+      txt[txt == 'Meek Sweater & Fashions Ltd.'] <- 'Meek Sweater Limited'
+      txt[txt %in% c('Mondal Garments', 'Mondal Knit Wear Ltd.', 'Mondal Knit Wears Ltd.', 'Mondal textile Ltd.', 'Mondol Apparels Ltd.', 'Mondol Intimates Ltd.')] <- 'Mondal Garments'
+      txt[txt == 'Bela Fashions Ltd.'] <- 'Bela Fashions Ltd'
+      txt[txt %in% c(" Cant say", "Cant say")] <- "Can't say"
+      txt[txt == "Colossus apparel limited (unit 2)"] <- "Colossus Apparel Limited"
+      txt[txt %in% c("Masco printing & embroidery", "MASCOTEX LIMITED", "Masco Industries Ltd.", "Masco Cottons Ltd.")] <- "Masco"
+      txt[txt %in% c("Concord Raiment Wear Ltd.", "Concord Creations Ltd.")] <- "Concord Garments"
+      txt[txt == "Tex-Tech Garments Ltd."] <- "TexTech Co. Ltd."
+      txt[txt %in% c("Masstris Garments", "Masstik Garments")] <- "Matrix Styles Ltd."
+      txt[txt == "Gorip and gorip sweaters ltd."] <- "Garib and Garib"
+      return(txt)
+  }
+  
+  res <- dat %>%
+    mutate_at(vars, cleanFactory) %>%
+    melt(id.vars = c('respondent_id'), measure.vars = vars) 
+  res <- res %>%
+    mutate(variable = '_Overall') %>%
+    rbind(res) %>%
+    mutate(rank = paste0('Rank', str_extract(as.character(variable), '_.*')),
+           rank = str_replace(rank, '_', '')) %>%
+    dcast(value ~ rank, fun.aggregate = length)
+  
+  res2 <- dat %>%
+    mutate_at(vars, cleanFactory) %>%
+    melt(id.vars = c('respondent_id', 'q66'), measure.vars = vars) 
+  res2 <- res2 %>% 
+    mutate(variable = '_Overall') %>%
+    rbind(res2) %>%
+    mutate(rank = paste0('Rank', str_extract(as.character(variable), '_.*')),
+           rank = str_replace(rank, '_', '')) %>%
+    dcast(value ~ q66 + rank, fun.aggregate = length) 
+  
+  res <- res %>% merge(res2) %>%
+    group_by(value) %>% summarise_at(vars(matches('.*Rank.*')), sum) %>%
+    filter(!is.na(value)) 
+    
+  headerCols = c(1, rep(4, 4))
+  names(headerCols) <-  c(' ', 'Rank, all', 'Rank, compliant', 'Rank, IDK', 'Rank, local')
+  kab <- res %>%
+    kable(caption = getQuestionLabels(var, questionLabs), longtable = TRUE,
+          col.names = c('Response', rep(c(1:3, 'Total'), 4)),
+          booktabs = TRUE) %>%
+    column_spec(1, width = '10em')%>%
+    kable_styling(latex_options =c("striped", "hold_position"))%>% 
+    add_header_above(headerCols) 
+  print(kab)
+  
+
+}
+
+analyseQ70 <- function(dat, var) {
+  dat$q69 <- as.character(dat$q69)
+  res <- analyseCat(dat, var)
+      seps <- c()
+      seps <- unique(dat$q69[!is.na(dat$q69)])
+      for(sep in seps) {
+        res2 <- analyseCat(dat[(dat$q69== sep),], 
+                               var)
+        res <- res %>% 
+              merge(
+                res2, suffixes = c('', sep),
+                by = 'Response', all.x = TRUE
+              )
+      }
+
+      res %>%
+        customKable(var,  col.names = c('Response', rep(c('n', 'p'), length(seps) + 1)),
+                  questionLabs, addHeader =  TRUE, 
+                  headerCols = c (1, rep(2, length(seps) + 1)),
+                  headerColNames = c(' ', 'All', paste0('Q69 answer: ', seps)),
+                  col1Width = '10em')
+}
+
+specialVarList <- list('q64_1' = analyseQ645, 'q65_1' = analyseQ645, 'q70' = analyseQ70)
+
+analysis(dat, vars, sepVar = 'q66', 
+         questionLabs = questionLabs, idVar = 'respondent_id', 
+         nonMissingVarList = NA, catVarList = catVarList, rankVarList = rankVarList,
+         numericVarList = numericVarList, multiVarList = multiVarList, specialVarList = specialVarList,
+         debug = FALSE)
+
+
+```
+

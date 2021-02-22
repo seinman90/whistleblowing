@@ -1,0 +1,48 @@
+---
+title: "Predicting harassment"
+author: "Sarah Inman"
+date: "7 July 2020"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+  extra_dependencies: float
+header-includes: \usepackage{booktabs} \usepackage{longtable} \usepackage{array} \usepackage{multirow} \usepackage{dcolumn} \usepackage{rotating}
+  \usepackage{wrapfig} \usepackage{float} \floatplacement{table}{H} \maxdeadcycles=200
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=10, fig.height=5, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+# Method summary
+
+We report the relationship between likelihood of reporting different types of harassment and covariates.
+
+We include only those in the sewing section, and we drop those in a supervisor position.
+
+We use a linear probability model, and we cluster standard errors by factory.
+
+We show two subsets of the data: one includes all factories with over one observation, and the second includes our three largest factories (factory codes 13, 63 and 90). For the latter sample, we report p values using the wild cluster bootstrap-t, as per Cameron Gelbach Miller 2008. 
+
+```{r, results = 'asis'}
+
+wd <- '~/Insync/sei2112@columbia.edu/Google Drive - Shared with me/Sarah Summer 2020/COVID-19/'
+setwd(wd)
+source('Code/Pilot/analysis/reports/predictSexualHarassment/predictSexualHarassment.R')
+
+survey2017 <- read.dta13('Data/raw/2017_survey_data/data_NK_2017 (2).dta') 
+# create the list of specifications
+modList <- list(
+  ada1 = c(q9_1 = 'none', q9_2 = 'none', ada = 'ada1'),
+  ada2 = c(q9_1 = 'none', q9_2 = 'none', ada = 'ada2'),
+  ada4 = c(q9_1 = 'none', q9_2 = 'none', ada = 'ada4'),
+  ada5 = c(q9_1 = 'none', q9_2 = 'none', ada = 'ada5')
+)
+outcomeVarsList <- outcomeVarsList[c(1, 2)]
+dat <- cleanDat(survey2017)
+runModels(dat)
+
+```
+

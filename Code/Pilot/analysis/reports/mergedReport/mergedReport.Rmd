@@ -1,0 +1,441 @@
+---
+title: 'Summary: Merged Survey'
+author: "Sarah Inman"
+date: "25 May 2020"
+output:
+  pdf_document: default
+  extra_dependencies: float
+  html_document: default
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{table}{H}
+ \maxdeadcycles=200
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=10, fig.height=5, fig.path='Figs/',
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+```
+ I have excluded some variables from the analysis for the following reasons:
+ 
+ * Variables that didn't seem like they should be included: section 1, q16.7
+ * Freehand variables: q4.7, q13.13, q14.9, q14.19, q14.20, q15.3, q16.5
+ * Indicators for "don't know": q2.2dk, q2.3dk, q2.4dk
+ * Variables that didn't appear to be filled in: q2.6
+ * Variables I couldn't identify in the questionnaire: q7.3.1.1
+ 
+I have also hand-recoded q8.6 and q8.7 and turned them into multiple-choice questions.
+```{r, results = 'asis'}
+
+wd <- '~/Insync/sei2112@columbia.edu/Google Drive - Shared with me/Sarah Summer 2020/COVID-19/'
+setwd(wd)
+
+source('Code/Pilot/analysis/summaryStats.R')
+source('Code/Pilot/intermediate/merge.R')
+
+# q8_6 and q8_7 have some people listing multiple answers in one box - fix this by turning
+# them into multi-choice questions
+fixMulti <- function(df, var) {
+  keep <- df[,var]
+  df[,var] <- as.character(df[,var]) %>% str_replace_all(' ', '')
+  df[,paste0(var, '_1')] <- str_extract(df[,var], '[a-z]+')
+  df[,paste0(var, '_2')] <- str_extract(df[,var], '-[a-z]+') %>% str_replace('-', '')
+  df[,paste0(var, '_3')] <- str_extract(df[,var], '-[a-z]+-[a-z]+') %>% str_replace('-[a-z]+-', '')
+  levels <- levels(keep)[as.character(levels(keep)) %in% df[,paste0(var, '_1')]]
+  df <- df %>%
+    mutate_at(vars(paste0(var, '_', 1:3)), ~factor(., levels = levels))
+  df <- df[,1:(which(names(df) == var) - 1)] %>% 
+    cbind(df[,paste0(var, '_', 1:3)]) %>%
+    cbind(df[,(which(names(df) == var) + 1):(ncol(df) - 3)])
+  return(df)
+}
+df <- fixMulti(df, 'q8_6')
+df <- fixMulti(df, 'q8_7')
+
+# the recoded values of these variables look easier to deal with
+for(i in 1:3) {
+  df[,paste0('q18_9', 1)] <- df[,paste0('q18_9', i, '_recoded')]
+  for(k in c('f', 'm')) {
+    df[,paste0('q3_5', k)] <- df[,paste0('r_q3_5', k)]
+    df[,paste0('q18_7', k, i)] <- df[,paste0('q18_7', k, i, '_recoded')]
+    df[,paste0('q18_8', k)] <- df[,paste0('q18_8', k, '_recoded')] %>% as.character()
+  }
+}
+
+varLists <- getVarList(df, exceptions = list('Other' = c('q2_12', 'q13_13'), 'multi' = c('q7_3_4', 'q8_6', 'q8_7',
+                                                                               'q11_1_', 'q18_7f', 'q18_7m')))
+
+# manually cleaning free-hand entries
+fixCareer <- function(var) {
+  var <- as.character(var)
+  var[var %in% c('construction work', 'digging earth')] <- 'construction'
+  var[var %in% c('garment worker', 'socks factory worker', 'shoe factory work', 'katha sewing', 'weave', 'cloth business', 'embroidery work', 'zipper factory', 'job on cap factory', 'cap sewing', 'tailoring', 'tailoring/embroidery', 'weaver', 'bag factory')] <- 'garment worker'
+  var[var %in% c('cook', 'maid servant',"house hold work", 'cleaner', 'bodi making', 'pitha/cake business')] <- 'domestic work / culinary'
+  var[var %in% c('duck-chicken farm/poultry farm', 'shrimp cultivation', 'day labour/agri day labour/brickfield', 'cow-goat rearing','fisherman/fish business', 'paddy/rice business', 'cow boy/rakhal', 'duck-hen rearing/poultry worker', 'cow broker',"poultry worker")] <- 'agriculture'
+  var[var %in% c('police', 'justice')] <- 'police'
+  var[var %in% c('cotton mill', 'rice mill worker', 'cotton factory work', 'jute mill', 'workshop worker', 'food industry/ biscuits factory', 
+                         'textile mill job', 'sugar mill job', 'carton factory job', 'cement factory', 'plastic factory',
+                         'ice-cream factory', 'cycle tubes factory')] <- 'other factory worker'
+  var[var %in% c('beauty parlor', 'nurse', 'nursery', 'doctor', 'job on medicine company')] <- 'health and social care'
+  var[var %in% c('cane mat make', 'floor mat make')] <- 'handicraft'
+  var[var %in% c('teacher', 'private tuition')] <- 'education'  
+  var[var %in% c('carpenter', 'painter', 'electrician', 'mason')] <- 'tradesman'
+  var[var %in% c('shop salesman', 'grocery shop', 'sweets shop/ restaurant worker')] <- 'retail'
+  var[var %in% c('betel leaf/tobacco leaf business', 'cloths business', 'cosmetics business', 'fruits business',
+                         'machinery parts business', 'marketing job', 'vegetable business','small business')] <- 'business'
+  return(var)
+
+}
+
+
+questionLabs <- list(
+  q1_1 = 'HHID',
+  q2_1 = 'Name and address of the present factory',
+  q2_2num = "Do you know how many workers work in this factory?",
+  q2_3num = "Do you know how many workers work in yoru section?",
+  q2_4f = "Do you know how the number of female workers in your section?",
+  q2_4m = "Do you know how the number of male workers in your section?",
+  q2_5 = 'Owner of this factory is...',
+  q2_6 = 'If foreign or joint venture, which  country?',
+  q2_7 = 'What type of products are produced here?',
+  q2_8 = 'Are the products sold to other factories?',
+  q2_9 = 'Are the products sold to other countries?',
+  q2_10 = 'Can you name the countries?',
+  q2_11 = "Do you know the name of the buyers or brands?",
+  q2_12 = "Please name the brands/buyers",
+  q3_1 = 'Age of respondent',
+  q3_2 = 'Gender of respondent',
+  q3_3 = 'Years of schooling',
+  q3_4 = 'Marital status',
+  q3_5f = 'If married, occupation of wife',
+  q3_5m = 'If married, occuation of husband',
+  q3_6 = 'What is the educational qualification of your spouse? Classes passed:',
+  q3_7 = 'Do you have children less than five years of age?',
+  q3_8 = 'If yes, who does the child live with?',
+  q3_9 = 'Were you born here, or did you come from elsewhere?',
+  q3_10 = 'If from somewhere else, did you come with the intnetion of working in a garments factory?',
+  q3_11 = 'What is your living arrangement?',
+  q3_12 = 'How do you go to work?',
+  q3_13 = 'How long does it take you to reach the factory?',
+  q3_14 = 'Do you wear borkha, hijab or cover your head on your way to work?',
+  q3_15 = 'Do you have a bank account?',
+  q3_16 = 'How do you usually send money home?',
+  q3_17 = 'Are you a member of any NGO, political party, informal association, or religious class (Talim)?',
+  q4_1 = 'At what age did you first start working to earn money?',
+  q4_2f = 'What was that work? (Women)',
+  q4_2m = 'What was that work? (Men)',
+  q4_3 = 'If you first work is not in a garment factory, at what age did you first start working in a garment factory?',
+  q4_4 = 'Who first took the decision that you should work in a garment factory?',
+  q4_5 = 'Did anyone object to this decision?',
+  q4_6 = 'If someone objected, then who?',
+  q4_7 = 'Why did you enter garment factory work instead of any other work?',
+  q5_1 = 'In which year did you first start working in a garment factory?',
+  q5_2 = 'How did you get to know about this first job?',
+  q5_3 = 'Did you need any educational qualification for this first job?',
+  q5_4 = 'Did you need any prior experience to get this first job?',
+  q5_5 = 'Did you need to pay bribe to get this first job?',
+  q5_61s = 'What was your section  when you first joined this first job?',
+  q5_62d = 'What was your designation  when you first joined this first job?',
+  q5_7 = 'What was your basic salary when you started?',
+  q5_8 = 'How long did you work in this factory?',
+  q5_9 =  'How many other factories have you worked in since then?',
+  q5_10 = 'If you have changed factories, what was the main reason for leaving the last factory?',
+  q5_11 = 'How long have you been working as a garments worker for?',
+  q6_1 = 'In which year did you start working in this current factory?',
+  q6_2 = 'How did you get to know about this job?',
+  q6_3 = 'Did you need any educational qualification for this job?',
+  q6_4 = 'Did you need any prior experience to get this job?',
+  q6_5 = 'Did you need to pay a bribe to get this job?',
+  q6_61s = 'What was your section when you first joined this job?',
+  q6_62d = 'What was your designation when you first joined this job?',
+  q6_7 = 'What was your work status when you first joined this factory?',
+  q6_8 = 'What was your basic salary when you first joined this factory?',
+  q7_11s = 'What is your current section in this factory?',
+  q7_12d = 'What is your current designation in this factory?',
+  q7_2 = 'What is your current work status?',
+  q7_3_1 = 'Do you have a written appointment letter?',
+  q7_3_2 = 'Do you have a factory ID card?',
+  q7_3_3 = 'Does your salary increase every year?',
+  q7_3_4 = 'Do you get any kind of bonus?',
+  q7_3_5 = 'On what basis do you get your salary?',
+  q7_3_6 = 'What day of the month do you get your salary?',
+  q7_3_7 = 'Do you get salary and overtime at the same time or overtime later?',
+  q7_3_8 = 'Do you get weekly holiday?',
+  q7_3_9 = 'Do you get paid leave?',
+  q7_3_10 = 'Does the factory provide maternity leave?',
+  q7_3_11 = 'Does your factory offer free transport?',
+  q7_3_12 = 'Does your factory offer tiffin, day care or medical facilities?',
+  q8_1 = 'What was your salary including overtime last month?',
+  q8_2_1s = 'How much was your basic salary?',
+  q8_2_2o = 'How much was the overtime?',
+  q8_2_3b = 'How much was the attendance bonus?',
+  q8_3 = "Is the hourly overtime wage higher than your hourly regular wage rate?",
+  q8_4 = 'How many days do you usually work in a week?',
+  q8_5 = 'What are your typical working hours?',
+  q8_6 = 'Which months of the year do you have less work pressure than usual?',
+  q8_7 = 'Which months of the year do you have less work pressure than usual?',
+  q8_8 = 'How many hours of overtime on average did you work when your work pressure was high last year?',
+  q8_9 = 'How much salary can you earn when your work pressure is high?',
+  q8_10 = 'Can you choose to do overtime or is it compulsory?',
+  q8_11 = 'Does your factory deduct money from your salary if you fail to meet th eproduction target?',
+  q8_12 = 'Have you ever been threatened with termination of your appointment if you could not meet the production target?',
+  q9_1 = 'Which statement best expresses the relationship between worker and staff/management:',
+  q9_2_1 = 'Do you agree that your supervisor respects you?',
+  q9_2_2 = 'Do you agree that your supervisor does not use bad language with you?',
+  q9_2_3 = 'Do you agree that if you unintentionally make a mistake, your supervisor will side with you?',
+  q9_2_4 = 'Do you agree that you respect your supervirosr\'s knowledge and skill regarding work?',
+  q9_2_5 = 'Do you agree that your supervisor speaks openly and in a straight-forward fashion with you',
+  q9_2_6 = 'Do you agree that you get fair salary and benefits in accordance with your work',
+  q10_1_1 = 'How often do you or others experience physical abuse?',
+  q10_1_2 = 'How often do you or others experience verbal abuse?',
+  q10_1_3 = 'How often do you or others experience sexual harassment?',
+  q10_1_4 = 'How often do you or others experience behaviour that makes you feel humiliated?',
+  q10_1_5 = 'How often do you or others experience threats?',
+  q10_2 = 'Who is most likely to be physically abusive?',
+  q10_3 = 'From whom is one more likely to hear verbal abuse or humiliating comments?',
+  q10_4 = 'Who is more abused, men or women?',
+  q10_5 = 'What are the main reasons for verbal or physical abuse?',
+  q10_6 = 'Have you ever experienced misbehaviour, abuse or harassment in this factory?',
+  q10_7 = 'If so, what kind?',
+  q10_8 = 'Have you ever experienced sexual harassment on your way to this factory?',
+  q10_9 = 'If yes, what kind of harassment?',
+  q10_10 = 'If yes, how frequently?',
+  q10_11 = 'Is there a health and safety committee in your factory?',
+  q10_12 = 'Have you ever been injured while working in this factory?',
+  q10_13 = 'Have you ever missed work because of this?',
+  q10_14 = 'How much did you spend for your treatment?',
+  q10_15 = 'If you needed to spend on treatment, did the management bear a portion of the cost?',
+  q10_16 = 'Do you feel safe working in this factory?',
+  q10_17 = 'If not, what are the reasons for not feeling safe?',
+  q10_18 = 'Finishing the work takes precedence over safety when the pressure of work is high - do you agree with this?',
+  q11_1_ = 'Have you received any type of training since joining this factory apart from on the job training?',
+  q11_2 = 'If you did receive training, what was the last training on?',
+  q11_3 = 'What was the duration of the last training?',
+  q11_4 = 'Who gave the last training?',
+  q11_5 = 'Did you get any certificate after receiving this training?',
+  q11_6 = 'Did all workers receive this training?',
+  q11_7 = 'If not, how were workers selected for this training?',
+  q11_8 = 'What kinds of training are important to get promotion?',
+  q11_9 = 'Has your salary increased since joinign this factory?',
+  q11_10 = 'If yes, how many months ago did you get a pay raise?',
+  q11_11 = 'Did you get any promotion after joining this factory?',
+  q11_12 = 'Was the promotion based on training?',
+  q12_1 = 'In the last 12 months, have there been any new auto machines introduced in your line or section?',
+  q12_2 = 'If yes, what kind of auto machine? Example, auto cutter, auto trimmer, air pump, overlock, jacquard, etc. ',
+  q12_3 = 'Has the number of workers decreased because of the new machines?',
+  q12_4 = 'If number has decreased, what are the workers doing now?',
+  q12_5 = 'If a new machine has been introduced, have you worked on this new machine, have not worked on the new machine or been displaced to other work?',
+  q12_6 = 'If you have worked on the new machine, did you get any training on that machine?',
+  q12_7 = 'If yes, has the training increased your efficiency and production?',
+  q12_8 = 'Has working on the new machine increased your work pressure?',
+  q12_9 = 'Has working on the new machine reduced your reliance on other workers and made you more autonomous?',
+  q12_10 = 'Has working on this new machine increased your own safety?',
+  q13_1 = 'How many times in the past 12 months have buyers or brand auditors visited to check the factory environment?',
+  q13_2 = 'Do they ever talk to workers?',
+  q13_3 = 'How many times in the past 12 months have audits or third party audits like BSCI, Sedex, Wrap visited the factory?',
+  q13_4 = 'How many times in the past 12 months have factory inspectors visited to check the factory environment?',
+  q13_5 = 'Do they ever talk to workers?',
+  q13_6 = 'Have you ever talked to the buyer, brand audit or the government factory inspector?',
+  q13_7 = 'If yes, did anyone teach you what to say?',
+  q13_8 = 'Do you know of the "code of conduct" or rules from the buyers or the brands about good working conditions and protecting the rights of the workers?',
+  q13_9 = 'If yes, where have you seen the "code of conduct" or rules? ',
+  q13_10 = 'Has this code of conduct brought about any positive changes in your work life?',
+  q13_11 = 'Is your factory compliant?',
+  q13_12 = 'Have you heard of Accord, Alliance or NTPA (BUET, ILO)?',
+  q13_13 = 'If yes, what have you heard about them?',
+  q13_14 = 'Is your factory associated with Accord or Alliance?',
+  q13_15 = 'If yes, have there been any changes in working conditions and safety since association with Accord or Alliance?',
+  q13_16 = 'If yes, what sort of changes?',
+  q13_17 = 'Was the factory/ sections of the factory closed down for renovations due to Accord or Alliance?',
+  q13_18 = 'If yes, were you given any compensation during the time that it was closed for renovations?',
+  q13_19 = 'Have you ever called on the 24 hour helpline provided by Alliance?',
+  q13_20 = 'If yes, how effective was it?',
+  q14_1_1 = 'If workers have any problems or complaints, do they raise those complaints at PC commmittee?',
+  q14_1_2 = 'If workers have any problems or complaints, do they raise those complaints at trade union/labour association inside the factory',
+  q14_1_3 = 'If workers have any problems or complaints, do they raise those complaints at trade union/labour association outside the factory',
+  q14_1_4 = 'If workers have any problems or complaints, do they raise those complaints at complaint box',
+  q14_1_5 = 'If workers have any problems or complaints, do they raise those complaints to the supervisor',
+  q14_1_6 = 'If workers have any problems or complaints, do they raise those complaints directly to management',
+  q14_1_7 = 'If workers have any problems or complaints, do they raise those complaints to others e.g. buyer/brand auditor ',
+  q14_2 = 'Is there a workers’ participation committee (WPC) in the factory?',
+  q14_3 = 'How many workers members are there in the committee?',
+  q14_4 = 'How many management members are there in the committee?',
+  q14_5 = 'Are the members elected by the workers or selected by the management?',
+  q14_6 = 'If they were elected, did you vote?',
+  q14_7 = 'Are you a member of a workers participation committee?',
+  q14_8 = 'Are you or were you ever in a leadership position in the WPC?',
+  q14_9 = 'What kind of complaints are placed at the WPC?',
+  q14_10 = 'Have you ever taken any complaint to the WPC?',
+  q14_11_1 = 'Do you agree or disagree that Workers can openly express their views when they take any complaints to the WPC',
+  q14_11_2 = 'Do you agree or disagree that WPC looks out for problems and complaints of workers',
+  q14_11_3 = 'Do you agree or disagree that The management gives importance to the WPC.',
+  q14_11_4 = 'Do you agree or disagree that WPC is effective and it has a positive influence on the work environment.',
+  q14_11_5 = 'Do you agree or disagree that The WPC can give a satisfactory solution to the complaints that it receives',
+  q14_12 = 'Is there is a trade union/ labour organization in this factory?',
+  q14_13 = 'If yes, are you a member of or in a leadership position in that trade union?',
+  q14_14 = 'Are you associated with any trade union/ labour organization outside the factory?',
+  q14_15 = 'Do you think these kinds of labour organizations are effective in resolving workers’ problems?',
+  q14_16 = 'How does the management view being involved with such labour organizations?',
+  q14_17 = 'Has this factory ever harassed you, disciplined you or demoted you for being involved with or for trying to be involved with labour organization activities?',
+  q14_18 = 'Have you participated in any job related protest, movement or public meeting in the past 1 year?',
+  q14_19 = 'If yes, why?',
+  q14_20 = 'Who arranged it?',
+  q14_21 = 'Did other workers from your factory also participate in it?',
+  q15_1 = "Do you know about the labour law?",
+  q15_2 = 'If yes, how did you find out about this law?',
+  q15_3 = 'What is written for factory workers in the labour law?',
+  q15_4_1 = 'How important is Job security for you?',
+  q15_4_2 = 'How important is Socially acceptable wage for you?',
+  q15_4_3 = 'How important is Safe and healthy work environment for you?',
+  q15_4_4 = 'How important is No discrimination between sexes for you?',
+  q15_4_5 = 'How important is Right to join a trade union and collective bargaining for you?',
+  q15_4_6 = 'How important is Not to work for excessive hours for you?',
+  q15_4_7 = 'How important is Paid leave for you?',
+  q15_5 = 'Have you ever received any training on rights, negotiations and collective bargaining?',
+  q15_6 = 'Who gave this training?',
+  q15_7 = 'Have you heard about the sexual harassment law?',
+  q15_8 = 'Do you know whether any incident of sexual harassment in this factory has been raised with the WPC or the management?',
+  q15_9 = 'Do you know whether any incident of sexual harassment in this factory has been raised with the government’s department of labour inspector in the past 12 months?',
+  q16_1 = 'Have you heard about the Rana Plaza incident?',
+  q16_2 = 'If yes, do you know when it happened?',
+  q16_3 = 'Do you know anyone who was harmed or died in this?',
+  q16_4 = 'Has the way you think about your work as a garment worker changed because of this incident?',
+  q16_5 = 'If yes, how has it changed?',
+  q16_6 = 'If you feel like that your building is not safe, will you be able to refuse to go to work?',
+  q16_7 = 'Since how long are you working here?',
+  q16_8 = 'So you joined this factory before the Rana Plaza incident?',
+  q16_9_1 = 'Have you seen any changes in Building safety, fire extinguisher, stairs, gates since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_2 = 'Have you seen any changes in Healthy work environment (open, light, air, clean, toilet, drinking water) since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_3 = 'Have you seen any changes in Safety training since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_4 = 'Have you seen any changes in Opportunity for overtime since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_5 = 'Have you seen any changes in Behaviour  of supervisor since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_6 = 'Have you seen any changes in Behaviour of management since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_7 = 'Have you seen any changes in Opportunity to complain since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_8 = 'Have you seen any changes in Salary and other benefits since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_9 = 'Have you seen any changes in Timely payment of salary and overtime since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_10 = 'Have you seen any changes in Job security since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_11 = 'Have you seen any changes in Opportunity for training and capacity building since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_12 = 'Have you seen any changes in Opportunity of promotion since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_9_13 = 'Have you seen any changes in Sexual harassment situation since the 2013 Rana Plaza incident or since you joined this factory?',
+  q16_10 = 'If there has been any improvement, why do you think the factory management has made these improvements?',
+  q17_1_1 = 'How satisfied are you with building safety?',
+  q17_1_2 = 'How satisfied are you with safety re: fire and electricity?',
+  q17_1_3 = 'How satisfied are you with the healthiness of the work environment (open, light, air, clean, toilet, drinking water)?',
+  q17_1_4 = 'How satisfied are you with your working hours and overtime?',
+  q17_1_5 = 'How satisfied are you with your production target?',
+  q17_1_6 = 'How satisfied are you with the behaviour of management?',
+  q17_1_7 = 'How satisfied are you with your opportunities to complain?',
+  q17_1_8 = 'How satisfied are you with your salary and bonus?',
+  q17_1_9 = 'How satisfied are you with the date of salary payment?',
+  q17_1_10 = 'How satisfied are you with your job security?',
+  q17_1_11 = 'How satisfied are you with your opportunities for training and skill development?',
+  q17_1_12 = 'How satisfied are you with your opportunities for promotion?',
+  q17_1_13 = 'How satisfied are you overall with your job?',
+  q17_2 = 'What is your relationship with your colleagues like?',
+  q18_1_1 = 'How often do you feel nervous in your workplace?',
+  q18_1_2 = 'How often do you feel afraid in your workplace?',
+  q18_1_3 = 'How often do you feel alert in your workplace?',
+  q18_1_4 = 'How often do you feel enthusiastic in your workplace?',
+  q18_1_5 = 'How often do you feel proud in your workplace?',
+  q18_1_6 = 'How often do you feel contented in your workplace?',
+  q18_2 = 'What do you think – what is needed for workers’ emotional well-being and productivity?',
+  q18_3 = 'Rank three good aspects about working in this factory according to importance', 
+  q18_4 = 'Rank three bad aspects about working in this factory according to importance',
+  q18_5 = 'What are the chances of you leaving this factory within the next 12 months?',
+  q18_6 = 'For how many more years do you want to work in the garment sector?',
+  q18_7 = 'What do you want to do after you stop doing this work?',
+  q18_8f = 'What is your most preferred occupation? (Women)',
+  q18_8m = 'What is your most preferred occupation? (Men)',
+  q18_9 = 'Why?',
+  q18_10f = 'What is your most disliked occupation? (Women)',
+  q18_10m = 'What is your most disliked occupation? (Men)',
+  q18_11 = 'Why?',
+  q19_1_1 = 'How much do you value your work?',
+  q19_1_2 = 'How much does your family value your work?',
+  q19_1_3 = 'How much is your work valued in your village?',
+  q19_1_4 = 'Do you feel that you have more rights as a garment worker than other workers?',
+  q19_1_5 = 'Do you think of yourself as a citizen of Bangladesh?',
+  q19_2_1 = 'Do you agree or disagree that you are happy to be known as a garment worker because my salary is good',
+  q19_2_2 = 'Do you agree or disagree that you are happy to be known as a garment worker because my work is safe',
+  q19_2_3 = 'Do you agree or disagree that you are not happy to be known as a garment worker because you can be fired at any time',
+  q19_2_4 = 'Do you agree or disagree that you are not happy to be known as a garment worker because you have to work beside men'
+)
+
+# fix the issues with q10.2-10.7
+noAbuse <- df %>% select_at(vars(matches('q10_1_.*'))) %>% 
+  mutate_all(as.numeric) %>% 
+  as.matrix() %>% 
+  apply(1, max)
+noAbuse <- noAbuse == 1
+for(var in paste0('q10_', 2:7)) {
+  noneText <- 'Answered none to q10.1'
+  vars <- names(df)[str_detect(names(df), var)]
+  for(v in vars) {
+    levels(df[[v]]) <- c(levels(df[[v]]), noneText)
+  }
+  df[noAbuse,vars[1]] <- noneText
+}
+
+# sort out the labels on q13_11
+df <- df %>%
+  mutate(q13_11 = as.character(q13_11),
+         q13_11 = ifelse(q13_11 == 'yes', 'Compliant',
+                      ifelse(q13_11 == 'no', 'Local', 'Don\'t know')))
+# change around levels of sepvar
+df$q13_11 <- factor(df$q13_11, levels = c('Compliant', 'Local', "Don\'t know"))
+
+# change around levels of q2.10 and 2.12 so it's easier to see
+for(var in c('q2_10', 'q2_12')) {
+  for(i in 1:3) {
+    v <- paste0(var, i)
+    l <- levels(df[[v]]) %>% sort()
+    df[[v]] <- as.character(df[[v]])
+    df[df[[v]] == 'texco' & !is.na(df[[v]]), v] <- 'tesko'
+    df[df[[v]] %in% c('begotich1', 'begotich2') & !is.na(df[[v]]), v] <- 'begotex'
+    df[[v]] <- factor(df[[v]], levels = l)
+    
+  }
+}
+
+
+# select a subset of variables to analyse
+vars <- names(df)[str_detect(names(df), '^q[0-9]{1,2}_[0-9]{1,2}.*')]
+vars <- vars[!str_detect(vars, 'recoded')] # get rid of the duplicate questions
+
+# keep only those that have at least one unique value
+nUnique <- df[,vars] %>% summarise_all(~length(unique(.))) %>% melt(id.vars = NULL) 
+
+drop <- nUnique$variable[nUnique$value ==1]
+
+vars <- vars[!(vars %in% drop)]
+
+
+
+
+# get rid of questions that shouldn't be analysed, for various reasons
+exclude <- c('qid', # individual identifier
+             'q2_2dk', 'q2_3dk',  'q2_4dk', # indicators for IDK
+             'q2_6',  # not filled in
+             'q4_71', 'q4_72', 'q13_131', 'q13_132', 'q13_133','q14_91', 'q14_92', 'q14_93', # freehand
+             'q14_94', 'q14_19', 'q14_201', 'q14_202', 'q15_31', 'q15_32', 'q15_33',
+             'q15_34', 'q16_51', 'q16_52', 
+             'q18_111', 'q18_112', 'q18_113', 'q18_114', 
+             'q7_3_1_1', # can't find this in questionnaire
+             'q16_7', 'q16_7yr') # shouldn't be included
+vars <- setdiff(vars, exclude)
+
+# drop the variables at the front panel of the interview
+vars <- vars[!str_detect(vars, '^q1_')]
+
+analysis(df, vars, sepVar = 'q13_11', 
+         questionLabs = questionLabs, idVar = 'qid', 
+         nonMissingVarList = NA, catVarList = varLists[['cat']], 
+         numericVarList = varLists[['num']], multiVarList = varLists[['multi']], debug = FALSE)
+
+```
